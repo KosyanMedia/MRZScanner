@@ -1,7 +1,4 @@
 //
-//  ContentView.swift
-//  Example
-//
 //  Created by Roman Mazeev on 01/01/2023.
 //
 
@@ -35,11 +32,7 @@ struct ContentView: View {
                             .frame(width: mrzRect.size.width, height: mrzRect.size.height)
                             .position(mrzRect.origin)
                             .task {
-                                do {
-                                    try await viewModel.startMRZScanning()
-                                } catch {
-                                    print(error.localizedDescription)
-                                }
+                                viewModel.startScanning()
                             }
                     }
                 }
@@ -58,8 +51,10 @@ struct ContentView: View {
             }
             .onAppear {
                 viewModel.cameraRect = proxy.frame(in: .global)
-                viewModel.mrzRect = .init(origin: .init(x: proxy.size.width / 2, y: proxy.size.height / 2),
-                                          size: .init(width: proxy.size.width - 40, height: proxy.size.width / 5))
+                viewModel.mrzRect = .init(
+                    origin: .init(x: proxy.size.width / 2, y: proxy.size.height / 2),
+                    size: .init(width: proxy.size.width - 40, height: proxy.size.width / 5)
+                )
             }
         }
         .alert(isPresented: .init(get: { viewModel.mrzResult != nil }, set: { _ in viewModel.mrzResult = nil })) {
@@ -67,14 +62,9 @@ struct ContentView: View {
                 title: Text("Important message"),
                 message: Text(createAlertMessage(mrzResult: viewModel.mrzResult!)),
                 dismissButton: .default(Text("Got it!")) {
-                    Task {
-                        try await viewModel.startMRZScanning()
-                    }
+                    viewModel.startScanning()
                 }
             )
-        }
-        .task {
-            viewModel.startCamera()
         }
         .statusBarHidden()
         .ignoresSafeArea()

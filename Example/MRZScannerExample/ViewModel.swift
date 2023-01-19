@@ -1,7 +1,4 @@
 //
-//  ViewModel.swift
-//  Example
-//
 //  Created by Roman Mazeev on 01/01/2023.
 //
 
@@ -10,52 +7,62 @@ import SwiftUI
 import MRZScanner
 import MRZParser
 import Vision
+import Foundation
 
 final class ViewModel: ObservableObject {
 
-    // MARK: Camera
-    private let camera = Camera()
-    @Published var cameraRect: CGRect?
+    private lazy var camera = Camera()
+    private lazy var scanner: MRZScanner = .makeDefaultScanner()
+
     var captureSession: AVCaptureSession {
         camera.captureSession
     }
 
-    func startCamera() {
-        Task {
-            await camera.start()
-        }
-    }
-
     // MARK: Scanning
+
+    @Published var cameraRect: CGRect?
     @Published var boundingRects: ScanedBoundingRects?
     @Published var mrzRect: CGRect?
     @Published var mrzResult: MRZResult?
 
     private var scanningTask: Task<(), Error>?
 
-    func startMRZScanning() async throws {
-        guard let cameraRect, let mrzRect else { return }
-
-        let correctedMRZRect = correctCoordinates(to: .leftTop, rect: mrzRect)
-        let roi = MRZScanner.convertRect(to: .normalizedRect, rect: correctedMRZRect, imageWidth: Int(cameraRect.width), imageHeight: Int(cameraRect.height))
-        let scanningStream = MRZScanner.scanLive(
-            imageStream: camera.imageStream,
-            configuration: .init(orientation: .up, regionOfInterest: roi, minimumTextHeight: 0.1, recognitionLevel: .fast)
-        )
-
+    func startScanning() {
         scanningTask = Task {
-            for try await liveScanningResult in scanningStream {
-                Task { @MainActor in
-                    switch liveScanningResult {
-                    case .found(let scanningResult):
-                        boundingRects = correctBoundingRects(to: .center, rects: scanningResult.boundingRects)
-                        mrzResult = scanningResult.result
-                        scanningTask?.cancel()
-                    case .notFound(let boundingRects):
-                        self.boundingRects = correctBoundingRects(to: .center, rects: boundingRects)
-                    }
-                }
+            await camera.start()
+
+            for try await image in camera.imageStream {
+                await scan(image: image)
             }
+        }
+    }
+
+    private func scan(image: CIImage) async {
+        guard let cameraRect, let mrzRect else {
+            return
+        }
+
+        
+        let correctedMRZRect = correctCoordinates(to: .leftTop, rect: mrzRect)
+        let roi = correctedMRZRect.convert(to: .normalizedRect, imageSize: cameraRect.size)
+
+        do {
+            let result = try await scanner.scanLive(
+                image: image,
+                orientation: .up,
+                regionOfInterest: roi,
+                minimumTextHeight: 0.1
+            )
+            Task { @MainActor in
+                self.boundingRects = self.correctBoundingRects(to: .center, rects: result.boundingRects)
+                self.mrzResult = result.data
+            }
+        } catch let error as ScanningResultError {
+            Task { @MainActor in
+                self.boundingRects = error.boundingRects
+            }
+        } catch {
+            print(error)
         }
     }
 
@@ -69,13 +76,19 @@ final class ViewModel: ObservableObject {
     private func correctBoundingRects(to type: CorrectionType, rects: ScanedBoundingRects) -> ScanedBoundingRects {
         guard let mrzRect else { fatalError("Camera rect must be set") }
 
-        let convertedCoordinates = rects.convertedToImageRects(imageWidth: Int(mrzRect.width), imageHeight: Int(mrzRect.height))
+        let convertedCoordinates = rects.convertedTo(imageSize: mrzRect.size)
         let correctedMRZRect = correctCoordinates(to: .leftTop, rect: mrzRect)
 
         func correctRects(_ rects: [CGRect]) -> [CGRect] {
             rects
                 .map { correctCoordinates(to: type, rect: $0) }
-                .map { .init(origin: .init(x: $0.origin.x + correctedMRZRect.minX, y: $0.origin.y + correctedMRZRect.minY), size: $0.size) }
+                .map {
+                    let point = CGPoint(
+                        x: $0.origin.x + correctedMRZRect.minX,
+                        y: $0.origin.y + correctedMRZRect.minY
+                    )
+                    return .init(origin: point, size: $0.size)
+                }
         }
 
         return .init(valid: correctRects(convertedCoordinates.valid),  invalid: correctRects(convertedCoordinates.invalid))
