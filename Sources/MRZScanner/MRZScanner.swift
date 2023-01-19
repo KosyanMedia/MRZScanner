@@ -1,7 +1,4 @@
 //
-//  MRZScanner.swift
-//  
-//
 //  Created by Roman Mazeev on 12.07.2021.
 //
 
@@ -9,51 +6,108 @@ import CoreImage
 import Vision
 import MRZParser
 
-public struct ScanningConfiguration {
-    let orientation: CGImagePropertyOrientation
-    let regionOfInterest: CGRect
-    let minimumTextHeight: Float
-    let recognitionLevel: VNRequestTextRecognitionLevel
+public struct MRZScanner {
 
-    public init(orientation: CGImagePropertyOrientation, regionOfInterest: CGRect, minimumTextHeight: Float, recognitionLevel: VNRequestTextRecognitionLevel) {
-        self.orientation = orientation
-        self.regionOfInterest = regionOfInterest
-        self.minimumTextHeight = minimumTextHeight
-        self.recognitionLevel = recognitionLevel
+    // MARK: - Properties
+
+    private let scanSingle: (
+        _ image: CIImage,
+        _ orientation: CGImagePropertyOrientation,
+        _ regionOfInterest: CGRect?,
+        _ minimumTextHeight: Float?
+    ) async throws -> MRZResult
+
+    private let scanLive: (
+        _ image: CIImage,
+        _ orientation: CGImagePropertyOrientation,
+        _ regionOfInterest: CGRect?,
+        _ minimumTextHeight: Float?
+    ) async throws -> ScanningResult
+
+    // MARK: - Init
+
+    public init(
+        scanSingle: @escaping (CIImage, CGImagePropertyOrientation, CGRect?, Float?) async throws -> MRZResult,
+        scanLive: @escaping (CIImage, CGImagePropertyOrientation, CGRect?, Float?) async throws -> ScanningResult
+    ) {
+        self.scanSingle = scanSingle
+        self.scanLive = scanLive
+    }
+
+    // MARK: - Convenient methonds
+
+    public static func makeDefaultScanner() -> Self {
+        .makeDefault()
+    }
+
+    public func scanSingle(
+        image: CIImage,
+        orientation: CGImagePropertyOrientation,
+        regionOfInterest: CGRect? = nil,
+        minimumTextHeight: Float? = nil
+    ) async throws -> MRZResult {
+        try await scanSingle(image, orientation, regionOfInterest, minimumTextHeight)
+    }
+
+    public func scanLive(
+        image: CIImage,
+        orientation: CGImagePropertyOrientation,
+        regionOfInterest: CGRect? = nil,
+        minimumTextHeight: Float? = nil
+    ) async throws -> ScanningResult {
+        try await scanLive(image, orientation, regionOfInterest, minimumTextHeight)
     }
 }
 
-public struct MRZScanner {
-    public static func scanLive(imageStream: AsyncStream<CIImage>, configuration: ScanningConfiguration) -> AsyncThrowingStream<LiveScanningResult<MRZResult>, Error> {
-        let frequencyTracker = MRZFrequencyTracker(frequency: 2)
+extension MRZScanner {
 
-        return imageStream.map { image in
-            let recognizerResults = try await VisionTextRecognizer.recognize(scanningImage: image, configuration: configuration)
-            let validatedResults = MRZValidator.getValidatedResults(from: recognizerResults.map(\.results))
+    static func makeDefault(
+        textRecognizer: TextRecognizer = .makeDefault(),
+        validator: MRZValidator = .makeDefault(),
+        parser: MRZParser = .init(isOCRCorrectionEnabled: true)
+    ) -> Self {
+        var frequencyTracker = MRZFrequencyTracker(frequency: 2)
 
-            let boundingRects = getScannedBoundingRects(from: recognizerResults, validLines: validatedResults)
-            guard let parsedResult = MRZParser.init(isOCRCorrectionEnabled: true).parse(mrzLines: validatedResults.map(\.result)) else {
-                return .notFound(boundingRects)
+        return .init(
+            scanSingle: { image, orientation, regionOfInterest, minimumTextHeight in
+                let configuration = TextRecognizer.Configuration(
+                    orientation: orientation,
+                    regionOfInterest: regionOfInterest,
+                    minimumTextHeight: minimumTextHeight,
+                    recognitionLevel: .accurate
+                )
+                let recognizerResults = try await textRecognizer.recognize(image, configuration)
+                let validatedResults = validator.getValidatedResults(recognizerResults.map(\.results))
+
+                if let parsedResult = parser.parse(mrzLines: validatedResults.map(\.result)) {
+                    return parsedResult
+                } else {
+                    throw ScanningResultError()
+                }
+            },
+            scanLive: { image, orientation, regionOfInterest, minimumTextHeight in
+                let configuration = TextRecognizer.Configuration(
+                    orientation: orientation,
+                    regionOfInterest: regionOfInterest,
+                    minimumTextHeight: minimumTextHeight,
+                    recognitionLevel: .fast
+                )
+                let recognizerResults = try await textRecognizer.recognize(image, configuration)
+                let validatedResults = validator.getValidatedResults(recognizerResults.map(\.results))
+                let lines = validatedResults.map(\.result)
+                let boundingRects = getScannedBoundingRects(from: recognizerResults, validLines: validatedResults)
+
+                if let parsedResult = parser.parse(mrzLines: lines), frequencyTracker.isResultStable(parsedResult) {
+                    return ScanningResult(data: parsedResult, boundingRects: boundingRects)
+                } else {
+                    throw ScanningResultError(boundingRects: boundingRects)
+                }
             }
-
-            return frequencyTracker.isResultStable(parsedResult)
-                ? LiveScanningResult.found(.init(result: parsedResult, boundingRects: boundingRects))
-                : .notFound(boundingRects)
-        }
-    }
-
-    public static func scanSingle(image: CIImage, configuration: ScanningConfiguration) async throws -> ScanningResult<MRZResult> {
-        let recognizerResults = try await VisionTextRecognizer.recognize(scanningImage: image, configuration: configuration)
-        let validatedResults = MRZValidator.getValidatedResults(from: recognizerResults.map(\.results))
-        guard let parsedResult = MRZParser.init(isOCRCorrectionEnabled: true).parse(mrzLines: validatedResults.map(\.result)) else {
-            throw MRZScannerError.codeNotFound
-        }
-
-        return .init(result: parsedResult, boundingRects: getScannedBoundingRects(from: recognizerResults, validLines: validatedResults))
+        )
     }
 
     private static func getScannedBoundingRects(
-        from results: [VisionTextRecognizer.Result],
+        from results: [TextRecognizer.Result],
         validLines: [MRZValidator.Result]
     ) -> ScanedBoundingRects {
         let allBoundingRects = results.map(\.boundingRect)
@@ -71,26 +125,4 @@ public struct MRZScanner {
 
         return .init(valid: validScannedBoundingRects, invalid: invalidScannedBoundingRects)
     }
-
-    private init() {}
-}
-
-public extension MRZScanner {
-    enum RectConvertationType {
-        case imageRect
-        case normalizedRect
-    }
-
-    static func convertRect(to type: RectConvertationType, rect: CGRect, imageWidth: Int, imageHeight: Int) -> CGRect {
-        switch type {
-        case .imageRect:
-            return VNImageRectForNormalizedRect(rect, imageWidth, imageHeight)
-        case .normalizedRect:
-            return VNNormalizedRectForImageRect(rect, imageWidth, imageHeight)
-        }
-    }
-}
-
-enum MRZScannerError: Error {
-    case codeNotFound
 }

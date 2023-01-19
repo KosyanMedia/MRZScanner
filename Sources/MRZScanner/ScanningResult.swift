@@ -1,34 +1,37 @@
 //
-//  ScanningResult.swift
-//  
-//
 //  Created by Roman Mazeev on 29/12/2022.
 //
 
 import CoreGraphics
+import MRZParser
 
-public struct ScanedBoundingRects {
-    public let valid: [CGRect], invalid: [CGRect]
+public struct ScanningResult: Sendable, Equatable {
+    public let data: MRZResult
+    public let boundingRects: ScanedBoundingRects
+}
 
-    public func convertedToImageRects(imageWidth: Int, imageHeight: Int) -> Self {
-        .init(
-            valid: valid.map { MRZScanner.convertRect(to: .imageRect, rect: $0, imageWidth: imageWidth, imageHeight: imageHeight) },
-            invalid: invalid.map { MRZScanner.convertRect(to: .imageRect, rect: $0, imageWidth: imageWidth, imageHeight: imageHeight) }
-        )
+public struct ScanningResultError: Error {
+    public let boundingRects: ScanedBoundingRects?
+
+    init(boundingRects: ScanedBoundingRects? = nil) {
+        self.boundingRects = boundingRects
     }
+}
+
+public struct ScanedBoundingRects: Sendable, Equatable {
+
+    public let valid: [CGRect]
+    public let invalid: [CGRect]
 
     public init(valid: [CGRect], invalid: [CGRect]) {
         self.valid = valid
         self.invalid = invalid
     }
-}
 
-public struct ScanningResult<T> {
-    public let result: T
-    public let boundingRects: ScanedBoundingRects
-}
-
-public enum LiveScanningResult<T> {
-    case notFound(ScanedBoundingRects)
-    case found(ScanningResult<T>)
+    public func convertedTo(imageSize: CGSize) -> Self {
+        .init(
+            valid: valid.map { $0.convert(to: .imageRect, imageSize: imageSize) },
+            invalid: invalid.map { $0.convert(to: .imageRect, imageSize: imageSize) }
+        )
+    }
 }
