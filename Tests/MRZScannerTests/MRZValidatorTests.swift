@@ -1,7 +1,4 @@
 //
-//  MRZValidatorTests.swift
-//  
-//
 //  Created by Roman Mazeev on 12.07.2021.
 //
 
@@ -9,6 +6,9 @@ import XCTest
 @testable import MRZScanner
 
 final class MRZValidatorTests: XCTestCase {
+
+    let validator = MRZValidator.makeDefault()
+
     func testTD1CleanValidation() {
         let valueToValidate = [
             ["I<UTOD231458907<<<<<<<<<<<<<<<"],
@@ -22,7 +22,7 @@ final class MRZValidatorTests: XCTestCase {
             .init(result: "ERIKSSON<<ANNA<MARIA<<<<<<<<<<", index: 2),
         ]
 
-        let expectedValidatedResult = MRZValidator.getValidatedResults(from: valueToValidate)
+        let expectedValidatedResult = validator.getValidatedResults(valueToValidate)
         XCTAssertEqual(expectedValidatedResult, validatedResults)
     }
 
@@ -37,14 +37,14 @@ final class MRZValidatorTests: XCTestCase {
             .init(result: "D231458907UTO7408122F1204159<<<<<<<6", index: 1),
         ]
 
-        let expectedValidatedResult = MRZValidator.getValidatedResults(from: valueToValidate)
+        let expectedValidatedResult = validator.getValidatedResults(valueToValidate)
         XCTAssertEqual(expectedValidatedResult, validatedResults)
     }
 
     func testEmptyValidation() {
         let validatedResults: [MRZValidator.Result] = []
 
-        let expectedValidatedResult = MRZValidator.getValidatedResults(from: [])
+        let expectedValidatedResult = validator.getValidatedResults([])
         XCTAssertEqual(expectedValidatedResult, validatedResults)
     }
 
@@ -59,7 +59,7 @@ final class MRZValidatorTests: XCTestCase {
             .init(result: "L898902C36UTO7408122F1204159ZE184226B<<<<<10", index: 1),
         ]
 
-        let expectedValidatedResult = MRZValidator.getValidatedResults(from: valueToValidate)
+        let expectedValidatedResult = validator.getValidatedResults(valueToValidate)
         XCTAssertEqual(expectedValidatedResult, validatedResults)
     }
 
@@ -88,7 +88,7 @@ final class MRZValidatorTests: XCTestCase {
         let validatedResults: [MRZValidator.Result] = [
         ]
 
-        let expectedValidatedResults = MRZValidator.getValidatedResults(from: valueToValidate)
+        let expectedValidatedResults = validator.getValidatedResults(valueToValidate)
         XCTAssertEqual(expectedValidatedResults, validatedResults)
     }
 
@@ -113,7 +113,7 @@ final class MRZValidatorTests: XCTestCase {
             .init(result: "L8988901C4XXX4009078F96121096ZE184226B<<<<<<", index: 1),
         ]
 
-        let expectedValidatedResults = MRZValidator.getValidatedResults(from: valueToValidate)
+        let expectedValidatedResults = validator.getValidatedResults(valueToValidate)
         XCTAssertEqual(expectedValidatedResults, validatedResults)
     }
 
@@ -156,7 +156,7 @@ final class MRZValidatorTests: XCTestCase {
             .init(result: "L8988901C4XXX4009078F9612109<<<<<<<<", index: 3),
         ]
 
-        let expectedValidatedResults = MRZValidator.getValidatedResults(from: valueToValidate)
+        let expectedValidatedResults = validator.getValidatedResults(valueToValidate)
         XCTAssertEqual(expectedValidatedResults, validatedResults)
     }
 }

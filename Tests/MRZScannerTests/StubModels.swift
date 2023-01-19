@@ -1,7 +1,4 @@
 //
-//  StubModels.swift
-//  
-//
 //  Created by Roman Mazeev on 14.07.2021.
 //
 
