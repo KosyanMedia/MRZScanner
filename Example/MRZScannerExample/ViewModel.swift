@@ -21,7 +21,7 @@ final class ViewModel: ObservableObject {
     // MARK: Scanning
 
     @Published var cameraRect: CGRect?
-    @Published var boundingRects: ScanedBoundingRects?
+    @Published var boundingRects: ScannedBoundingRects?
     @Published var mrzRect: CGRect?
     @Published var mrzResult: MRZResult?
 
@@ -73,7 +73,7 @@ final class ViewModel: ObservableObject {
         case leftTop
     }
 
-    private func correctBoundingRects(to type: CorrectionType, rects: ScanedBoundingRects) -> ScanedBoundingRects {
+    private func correctBoundingRects(to type: CorrectionType, rects: ScannedBoundingRects) -> ScannedBoundingRects {
         guard let mrzRect else { fatalError("Camera rect must be set") }
 
         let convertedCoordinates = rects.convertedTo(imageSize: mrzRect.size)

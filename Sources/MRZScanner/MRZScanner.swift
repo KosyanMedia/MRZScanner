@@ -109,7 +109,7 @@ extension MRZScanner {
     private static func getScannedBoundingRects(
         from results: [TextRecognizer.Result],
         validLines: [MRZValidator.Result]
-    ) -> ScanedBoundingRects {
+    ) -> ScannedBoundingRects {
         let allBoundingRects = results.map(\.boundingRect)
         let validRectIndexes = Set(validLines.map(\.index))
 

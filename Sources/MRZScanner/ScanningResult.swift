@@ -7,18 +7,18 @@ import MRZParser
 
 public struct ScanningResult: Sendable, Equatable {
     public let data: MRZResult
-    public let boundingRects: ScanedBoundingRects
+    public let boundingRects: ScannedBoundingRects
 }
 
 public struct ScanningResultError: Error {
-    public let boundingRects: ScanedBoundingRects?
+    public let boundingRects: ScannedBoundingRects?
 
-    init(boundingRects: ScanedBoundingRects? = nil) {
+    init(boundingRects: ScannedBoundingRects? = nil) {
         self.boundingRects = boundingRects
     }
 }
 
-public struct ScanedBoundingRects: Sendable, Equatable {
+public struct ScannedBoundingRects: Sendable, Equatable {
 
     public let valid: [CGRect]
     public let invalid: [CGRect]

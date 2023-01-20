@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "mrzparser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/KosyanMedia/MRZParser.git",
+      "state" : {
+        "revision" : "12f420768f193c798f3065528ec8b5b8fc36c1cd",
+        "version" : "1.0.1"
+      }
+    }
+  ],
+  "version" : 2
+}
